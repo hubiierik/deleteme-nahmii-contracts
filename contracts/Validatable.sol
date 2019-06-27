@@ -6,11 +6,13 @@
  * Copyright (C) 2017-2018 Hubii AS
  */
 
-pragma solidity ^0.4.25;
+pragma solidity >=0.4.25 <0.6.0;
 
 import {Ownable} from "./Ownable.sol";
 import {Validator} from "./Validator.sol";
 import {NahmiiTypesLib} from "./NahmiiTypesLib.sol";
+import {PaymentTypesLib} from "./PaymentTypesLib.sol";
+import {TradeTypesLib} from "./TradeTypesLib.sol";
 
 /**
  * @title Validatable
@@ -35,8 +37,8 @@ contract Validatable is Ownable {
     function setValidator(Validator newValidator)
     public
     onlyDeployer
-    notNullAddress(newValidator)
-    notSameAddresses(newValidator, validator)
+    notNullAddress(address(newValidator))
+    notSameAddresses(address(newValidator), address(validator))
     {
         //set new validator
         Validator oldValidator = validator;
@@ -50,47 +52,27 @@ contract Validatable is Ownable {
     // Modifiers
     // -----------------------------------------------------------------------------------------------------------------
     modifier validatorInitialized() {
-        require(validator != address(0));
+        require(address(validator) != address(0), "Validator not initialized [Validatable.sol:55]");
         _;
     }
 
-    modifier onlySealedOrder(NahmiiTypesLib.Order order) {
-        require(validator.isGenuineOrderSeals(order));
+    modifier onlyOperatorSealedPayment(PaymentTypesLib.Payment memory payment) {
+        require(validator.isGenuinePaymentOperatorSeal(payment), "Payment operator seal not genuine [Validatable.sol:60]");
         _;
     }
 
-    modifier onlyOperatorSealedOrder(NahmiiTypesLib.Order order) {
-        require(validator.isGenuineOrderOperatorSeal(order));
+    modifier onlySealedPayment(PaymentTypesLib.Payment memory payment) {
+        require(validator.isGenuinePaymentSeals(payment), "Payment seals not genuine [Validatable.sol:65]");
         _;
     }
 
-    modifier onlySealedTrade(NahmiiTypesLib.Trade trade) {
-        require(validator.isGenuineTradeSeal(trade));
+    modifier onlyPaymentParty(PaymentTypesLib.Payment memory payment, address wallet) {
+        require(validator.isPaymentParty(payment, wallet), "Wallet not payment party [Validatable.sol:70]");
         _;
     }
 
-    modifier onlyOperatorSealedPayment(NahmiiTypesLib.Payment payment) {
-        require(validator.isGenuinePaymentOperatorSeal(payment));
-        _;
-    }
-
-    modifier onlySealedPayment(NahmiiTypesLib.Payment payment) {
-        require(validator.isGenuinePaymentSeals(payment));
-        _;
-    }
-
-    modifier onlyTradeParty(NahmiiTypesLib.Trade trade, address wallet) {
-        require(validator.isTradeParty(trade, wallet));
-        _;
-    }
-
-    modifier onlyPaymentParty(NahmiiTypesLib.Payment payment, address wallet) {
-        require(validator.isPaymentParty(payment, wallet));
-        _;
-    }
-
-    modifier onlyPaymentSender(NahmiiTypesLib.Payment payment, address wallet) {
-        require(validator.isPaymentSender(payment, wallet));
+    modifier onlyPaymentSender(PaymentTypesLib.Payment memory payment, address wallet) {
+        require(validator.isPaymentSender(payment, wallet), "Wallet not payment sender [Validatable.sol:75]");
         _;
     }
 }

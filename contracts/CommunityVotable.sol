@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017-2018 Hubii AS
  */
-pragma solidity ^0.4.25;
+pragma solidity >=0.4.25 <0.6.0;
 
 import {Ownable} from "./Ownable.sol";
 import {CommunityVote} from "./CommunityVote.sol";
@@ -19,34 +19,26 @@ contract CommunityVotable is Ownable {
     // Variables
     // -----------------------------------------------------------------------------------------------------------------
     CommunityVote public communityVote;
-
-    bool public communityVoteUpdateDisabled;
+    bool public communityVoteFrozen;
 
     //
     // Events
     // -----------------------------------------------------------------------------------------------------------------
     event SetCommunityVoteEvent(CommunityVote oldCommunityVote, CommunityVote newCommunityVote);
+    event FreezeCommunityVoteEvent();
 
     //
     // Functions
     // -----------------------------------------------------------------------------------------------------------------
-    /// @notice Disable future updates of community vote contract
-    function disableUpdateOfCommunityVote() 
-    public 
-    onlyDeployer 
-    {
-        communityVoteUpdateDisabled = true;
-    }
-
     /// @notice Set the community vote contract
     /// @param newCommunityVote The (address of) CommunityVote contract instance
     function setCommunityVote(CommunityVote newCommunityVote) 
     public 
     onlyDeployer
-    notNullAddress(newCommunityVote)
-    notSameAddresses(newCommunityVote, communityVote)
+    notNullAddress(address(newCommunityVote))
+    notSameAddresses(address(newCommunityVote), address(communityVote))
     {
-        require(!communityVoteUpdateDisabled);
+        require(!communityVoteFrozen, "Community vote frozen [CommunityVotable.sol:41]");
 
         // Set new community vote
         CommunityVote oldCommunityVote = communityVote;
@@ -56,11 +48,23 @@ contract CommunityVotable is Ownable {
         emit SetCommunityVoteEvent(oldCommunityVote, newCommunityVote);
     }
 
+    /// @notice Freeze the community vote from further updates
+    /// @dev This operation can not be undone
+    function freezeCommunityVote()
+    public
+    onlyDeployer
+    {
+        communityVoteFrozen = true;
+
+        // Emit event
+        emit FreezeCommunityVoteEvent();
+    }
+
     //
     // Modifiers
     // -----------------------------------------------------------------------------------------------------------------
     modifier communityVoteInitialized() {
-        require(communityVote != address(0));
+        require(address(communityVote) != address(0), "Community vote not initialized [CommunityVotable.sol:67]");
         _;
     }
 }

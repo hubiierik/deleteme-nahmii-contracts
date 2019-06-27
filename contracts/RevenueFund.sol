@@ -6,7 +6,7 @@
  * Copyright (C) 2017-2018 Hubii AS
  */
 
-pragma solidity ^0.4.25;
+pragma solidity >=0.4.25 <0.6.0;
 pragma experimental ABIEncoderV2;
 
 import {Ownable} from "./Ownable.sol";
@@ -25,8 +25,7 @@ import {ConstantsLib} from "./ConstantsLib.sol";
 /**
  * @title RevenueFund
  * @notice The target of all revenue earned in driip settlements and from which accrued revenue is split amongst
- *   accrual beneficiaries. There will likely be 2 instances of this smart contract, one for revenue from trades
- *   and one for revenue from payments.
+ *   accrual beneficiaries.
  */
 contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, TransferControllerManageable {
     using FungibleBalanceLib for FungibleBalanceLib.Balance;
@@ -64,13 +63,13 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
     // Functions
     // -----------------------------------------------------------------------------------------------------------------
     /// @notice Fallback function that deposits ethers
-    function() public payable {
+    function() external payable {
         receiveEthersTo(msg.sender, "");
     }
 
     /// @notice Receive ethers to
     /// @param wallet The concerned wallet address
-    function receiveEthersTo(address wallet, string)
+    function receiveEthersTo(address wallet, string memory)
     public
     payable
     {
@@ -96,8 +95,8 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
     /// @param currencyCt The address of the concerned currency contract (address(0) == ETH)
     /// @param currencyId The ID of the concerned currency (0 for ETH and ERC20)
     /// @param standard The standard of token ("ERC20", "ERC721")
-    function receiveTokens(string balanceType, int256 amount, address currencyCt,
-        uint256 currencyId, string standard)
+    function receiveTokens(string memory balanceType, int256 amount, address currencyCt,
+        uint256 currencyId, string memory standard)
     public
     {
         receiveTokensTo(msg.sender, balanceType, amount, currencyCt, currencyId, standard);
@@ -109,19 +108,20 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
     /// @param currencyCt The address of the concerned currency contract (address(0) == ETH)
     /// @param currencyId The ID of the concerned currency (0 for ETH and ERC20)
     /// @param standard The standard of token ("ERC20", "ERC721")
-    function receiveTokensTo(address wallet, string, int256 amount,
-        address currencyCt, uint256 currencyId, string standard)
+    function receiveTokensTo(address wallet, string memory, int256 amount,
+        address currencyCt, uint256 currencyId, string memory standard)
     public
     {
-        require(amount.isNonZeroPositiveInt256());
+        require(amount.isNonZeroPositiveInt256(), "Amount not strictly positive [RevenueFund.sol:115]");
 
         // Execute transfer
         TransferController controller = transferController(currencyCt, standard);
-        require(
-            address(controller).delegatecall(
+        (bool success,) = address(controller).delegatecall(
+            abi.encodeWithSelector(
                 controller.getReceiveSignature(), msg.sender, this, uint256(amount), currencyCt, currencyId
             )
         );
+        require(success, "Reception by controller failed [RevenueFund.sol:124]");
 
         // Add to balances
         periodAccrual.add(amount, currencyCt, currencyId);
@@ -180,7 +180,7 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
     function periodCurrenciesByIndices(uint256 low, uint256 up)
     public
     view
-    returns (MonetaryTypesLib.Currency[])
+    returns (MonetaryTypesLib.Currency[] memory)
     {
         return periodCurrencies.getByIndices(low, up);
     }
@@ -202,7 +202,7 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
     function aggregateCurrenciesByIndices(uint256 low, uint256 up)
     public
     view
-    returns (MonetaryTypesLib.Currency[])
+    returns (MonetaryTypesLib.Currency[] memory)
     {
         return aggregateCurrencies.getByIndices(low, up);
     }
@@ -229,11 +229,14 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
 
     /// @notice Close the current accrual period of the given currencies
     /// @param currencies The concerned currencies
-    function closeAccrualPeriod(MonetaryTypesLib.Currency[] currencies)
+    function closeAccrualPeriod(MonetaryTypesLib.Currency[] memory currencies)
     public
     onlyOperator
     {
-        require(ConstantsLib.PARTS_PER() == totalBeneficiaryFraction);
+        require(
+            ConstantsLib.PARTS_PER() == totalBeneficiaryFraction,
+            "Total beneficiary fraction out of bounds [RevenueFund.sol:236]"
+        );
 
         // Execute transfer
         for (uint256 i = 0; i < currencies.length; i++) {
@@ -245,11 +248,11 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
                 continue;
 
             for (uint256 j = 0; j < beneficiaries.length; j++) {
-                address beneficiaryAddress = beneficiaries[j];
+                AccrualBeneficiary beneficiary = AccrualBeneficiary(address(beneficiaries[j]));
 
-                if (beneficiaryFraction(beneficiaryAddress) > 0) {
+                if (beneficiaryFraction(beneficiary) > 0) {
                     int256 transferable = periodAccrual.get(currency.ct, currency.id)
-                    .mul(beneficiaryFraction(beneficiaryAddress))
+                    .mul(beneficiaryFraction(beneficiary))
                     .div(ConstantsLib.PARTS_PER());
 
                     if (transferable > remaining)
@@ -258,18 +261,19 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
                     if (transferable > 0) {
                         // Transfer ETH to the beneficiary
                         if (currency.ct == address(0))
-                            AccrualBeneficiary(beneficiaryAddress).receiveEthersTo.value(uint256(transferable))(address(0), "");
+                            beneficiary.receiveEthersTo.value(uint256(transferable))(address(0), "");
 
                         // Transfer token to the beneficiary
                         else {
                             TransferController controller = transferController(currency.ct, "");
-                            require(
-                                address(controller).delegatecall(
-                                    controller.getApproveSignature(), beneficiaryAddress, uint256(transferable), currency.ct, currency.id
+                            (bool success,) = address(controller).delegatecall(
+                                abi.encodeWithSelector(
+                                    controller.getApproveSignature(), address(beneficiary), uint256(transferable), currency.ct, currency.id
                                 )
                             );
+                            require(success, "Approval by controller failed [RevenueFund.sol:274]");
 
-                            AccrualBeneficiary(beneficiaryAddress).receiveTokensTo(address(0), "", transferable, currency.ct, currency.id, "");
+                            beneficiary.receiveTokensTo(address(0), "", transferable, currency.ct, currency.id, "");
                         }
 
                         remaining = remaining.sub(transferable);
@@ -282,15 +286,15 @@ contract RevenueFund is Ownable, AccrualBeneficiary, AccrualBenefactor, Transfer
         }
 
         // Close accrual period of accrual beneficiaries
-        for (j = 0; j < beneficiaries.length; j++) {
-            beneficiaryAddress = beneficiaries[j];
+        for (uint256 j = 0; j < beneficiaries.length; j++) {
+            AccrualBeneficiary beneficiary = AccrualBeneficiary(address(beneficiaries[j]));
 
             // Require that beneficiary fraction is strictly positive
-            if (0 >= beneficiaryFraction(beneficiaryAddress))
+            if (0 >= beneficiaryFraction(beneficiary))
                 continue;
 
             // Close accrual period
-            AccrualBeneficiary(beneficiaryAddress).closeAccrualPeriod(currencies);
+            beneficiary.closeAccrualPeriod(currencies);
         }
 
         // Emit event

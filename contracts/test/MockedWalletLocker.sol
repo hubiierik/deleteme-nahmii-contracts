@@ -6,7 +6,7 @@
  * Copyright (C) 2017-2018 Hubii AS
  */
 
-pragma solidity ^0.4.25;
+pragma solidity >=0.4.25 <0.6.0;
 
 /**
  * @title MockedWalletLocker
@@ -22,6 +22,7 @@ contract MockedWalletLocker {
         int256 amount;
         address currencyCt;
         uint256 currencyId;
+        uint256 visibleTimeout;
     }
 
     struct NonFungibleLock {
@@ -30,6 +31,7 @@ contract MockedWalletLocker {
         int256[] ids;
         address currencyCt;
         uint256 currencyId;
+        uint256 visibleTimeout;
     }
 
     struct Unlock {
@@ -59,9 +61,9 @@ contract MockedWalletLocker {
     // Events
     // -----------------------------------------------------------------------------------------------------------------
     event LockFungibleByProxyEvent(address lockedWallet, address lockerWallet, int256 amount,
-        address currencyCt, uint256 currencyId);
+        address currencyCt, uint256 currencyId, uint256 visibleTimeoutInSeconds);
     event LockNonFungibleByProxyEvent(address lockedWallet, address lockerWallet, int256[] ids,
-        address currencyCt, uint256 currencyId);
+        address currencyCt, uint256 currencyId, uint256 visibleTimeoutInSeconds);
     event UnlockFungibleEvent(address lockedWallet, address lockerWallet, address currencyCt,
         uint256 currencyId);
     event UnlockFungibleByProxyEvent(address lockedWallet, address lockerWallet, address currencyCt,
@@ -90,21 +92,33 @@ contract MockedWalletLocker {
     }
 
     function lockFungibleByProxy(address lockedWallet, address lockerWallet, int256 amount,
-        address currencyCt, uint256 currencyId)
+        address currencyCt, uint256 currencyId, uint256 visibleTimeoutInSeconds)
     public
     {
-        fungibleLocks.push(FungibleLock(lockedWallet, lockerWallet, amount, currencyCt, currencyId));
+        fungibleLocks.push(
+            FungibleLock(
+                lockedWallet, lockerWallet, amount, currencyCt, currencyId, visibleTimeoutInSeconds
+            )
+        );
         lockedWallets.push(lockedWallet);
-        emit LockFungibleByProxyEvent(lockedWallet, lockerWallet, amount, currencyCt, currencyId);
+        emit LockFungibleByProxyEvent(
+            lockedWallet, lockerWallet, amount, currencyCt, currencyId, visibleTimeoutInSeconds
+        );
     }
 
-    function lockNonFungibleByProxy(address lockedWallet, address lockerWallet, int256[] ids,
-        address currencyCt, uint256 currencyId)
+    function lockNonFungibleByProxy(address lockedWallet, address lockerWallet, int256[] memory ids,
+        address currencyCt, uint256 currencyId, uint256 visibleTimeoutInSeconds)
     public
     {
-        nonFungibleLocks.push(NonFungibleLock(lockedWallet, lockerWallet, ids, currencyCt, currencyId));
+        nonFungibleLocks.push(
+            NonFungibleLock(
+                lockedWallet, lockerWallet, ids, currencyCt, currencyId, visibleTimeoutInSeconds
+            )
+        );
         lockedWallets.push(lockedWallet);
-        emit LockNonFungibleByProxyEvent(lockedWallet, lockerWallet, ids, currencyCt, currencyId);
+        emit LockNonFungibleByProxyEvent(
+            lockedWallet, lockerWallet, ids, currencyCt, currencyId, visibleTimeoutInSeconds
+        );
     }
 
     function unlockFungible(address lockedWallet, address lockerWallet,
@@ -252,12 +266,12 @@ contract MockedWalletLocker {
     function lockedIdsByIndices(address, address, address, uint256, uint256, uint256)
     public
     view
-    returns (int256[])
+    returns (int256[] memory)
     {
         return _lockedIdsByIndices;
     }
 
-    function _setLockedIdsByIndices(int256[] ids)
+    function _setLockedIdsByIndices(int256[] memory ids)
     public
     {
         _lockedIdsByIndices = ids;

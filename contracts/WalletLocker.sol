@@ -6,7 +6,7 @@
  * Copyright (C) 2017-2018 Hubii AS
  */
 
-pragma solidity ^0.4.25;
+pragma solidity >=0.4.25 <0.6.0;
 
 import {Ownable} from "./Ownable.sol";
 import {Configurable} from "./Configurable.sol";
@@ -28,6 +28,7 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
         address currencyCt;
         uint256 currencyId;
         int256 amount;
+        uint256 visibleTime;
         uint256 unlockTime;
     }
 
@@ -36,6 +37,7 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
         address currencyCt;
         uint256 currencyId;
         int256[] ids;
+        uint256 visibleTime;
         uint256 unlockTime;
     }
 
@@ -54,9 +56,9 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
     // Events
     // -----------------------------------------------------------------------------------------------------------------
     event LockFungibleByProxyEvent(address lockedWallet, address lockerWallet, int256 amount,
-        address currencyCt, uint256 currencyId);
+        address currencyCt, uint256 currencyId, uint256 visibleTimeoutInSeconds);
     event LockNonFungibleByProxyEvent(address lockedWallet, address lockerWallet, int256[] ids,
-        address currencyCt, uint256 currencyId);
+        address currencyCt, uint256 currencyId, uint256 visibleTimeoutInSeconds);
     event UnlockFungibleEvent(address lockedWallet, address lockerWallet, int256 amount, address currencyCt,
         uint256 currencyId);
     event UnlockFungibleByProxyEvent(address lockedWallet, address lockerWallet, int256 amount, address currencyCt,
@@ -84,8 +86,9 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
     /// @param amount The amount to be locked
     /// @param currencyCt The address of the concerned currency contract (address(0) == ETH)
     /// @param currencyId The ID of the concerned currency (0 for ETH and ERC20)
+    /// @param visibleTimeoutInSeconds The number of seconds until the locked amount is visible, a.o. for seizure
     function lockFungibleByProxy(address lockedWallet, address lockerWallet, int256 amount,
-        address currencyCt, uint256 currencyId)
+        address currencyCt, uint256 currencyId, uint256 visibleTimeoutInSeconds)
     public
     onlyAuthorizedService(lockedWallet)
     {
@@ -113,11 +116,13 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
         walletFungibleLocks[lockedWallet][lockIndex - 1].amount = amount;
         walletFungibleLocks[lockedWallet][lockIndex - 1].currencyCt = currencyCt;
         walletFungibleLocks[lockedWallet][lockIndex - 1].currencyId = currencyId;
+        walletFungibleLocks[lockedWallet][lockIndex - 1].visibleTime =
+        block.timestamp.add(visibleTimeoutInSeconds);
         walletFungibleLocks[lockedWallet][lockIndex - 1].unlockTime =
         block.timestamp.add(configuration.walletLockTimeout());
 
         // Emit event
-        emit LockFungibleByProxyEvent(lockedWallet, lockerWallet, amount, currencyCt, currencyId);
+        emit LockFungibleByProxyEvent(lockedWallet, lockerWallet, amount, currencyCt, currencyId, visibleTimeoutInSeconds);
     }
 
     /// @notice Lock the given locked wallet's non-fungible IDs of currency on behalf of the given locker wallet
@@ -126,8 +131,9 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
     /// @param ids The IDs to be locked
     /// @param currencyCt The address of the concerned currency contract (address(0) == ETH)
     /// @param currencyId The ID of the concerned currency (0 for ETH and ERC20)
-    function lockNonFungibleByProxy(address lockedWallet, address lockerWallet, int256[] ids,
-        address currencyCt, uint256 currencyId)
+    /// @param visibleTimeoutInSeconds The number of seconds until the locked ids are visible, a.o. for seizure
+    function lockNonFungibleByProxy(address lockedWallet, address lockerWallet, int256[] memory ids,
+        address currencyCt, uint256 currencyId, uint256 visibleTimeoutInSeconds)
     public
     onlyAuthorizedService(lockedWallet)
     {
@@ -155,11 +161,13 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
         walletNonFungibleLocks[lockedWallet][lockIndex - 1].ids = ids;
         walletNonFungibleLocks[lockedWallet][lockIndex - 1].currencyCt = currencyCt;
         walletNonFungibleLocks[lockedWallet][lockIndex - 1].currencyId = currencyId;
+        walletNonFungibleLocks[lockedWallet][lockIndex - 1].visibleTime =
+        block.timestamp.add(visibleTimeoutInSeconds);
         walletNonFungibleLocks[lockedWallet][lockIndex - 1].unlockTime =
         block.timestamp.add(configuration.walletLockTimeout());
 
         // Emit event
-        emit LockNonFungibleByProxyEvent(lockedWallet, lockerWallet, ids, currencyCt, currencyId);
+        emit LockNonFungibleByProxyEvent(lockedWallet, lockerWallet, ids, currencyCt, currencyId, visibleTimeoutInSeconds);
     }
 
     /// @notice Unlock the given locked wallet's fungible amount of currency previously
@@ -266,6 +274,28 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
         emit UnlockNonFungibleByProxyEvent(lockedWallet, lockerWallet, ids, currencyCt, currencyId);
     }
 
+    /// @notice Get the number of fungible locks for the given wallet
+    /// @param wallet The address of the locked wallet
+    /// @return The number of fungible locks
+    function fungibleLocksCount(address wallet)
+    public
+    view
+    returns (uint256)
+    {
+        return walletFungibleLocks[wallet].length;
+    }
+
+    /// @notice Get the number of non-fungible locks for the given wallet
+    /// @param wallet The address of the locked wallet
+    /// @return The number of non-fungible locks
+    function nonFungibleLocksCount(address wallet)
+    public
+    view
+    returns (uint256)
+    {
+        return walletNonFungibleLocks[wallet].length;
+    }
+
     /// @notice Get the fungible amount of the given currency held by locked wallet that is
     /// locked by locker wallet
     /// @param lockedWallet The address of the locked wallet
@@ -279,7 +309,7 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
     {
         uint256 lockIndex = lockedCurrencyLockerFungibleLockIndex[lockedWallet][currencyCt][currencyId][lockerWallet];
 
-        if (0 == lockIndex)
+        if (0 == lockIndex || block.timestamp < walletFungibleLocks[lockedWallet][lockIndex - 1].visibleTime)
             return 0;
 
         return walletFungibleLocks[lockedWallet][lockIndex - 1].amount;
@@ -298,7 +328,7 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
     {
         uint256 lockIndex = lockedCurrencyLockerNonFungibleLockIndex[lockedWallet][currencyCt][currencyId][lockerWallet];
 
-        if (0 == lockIndex)
+        if (0 == lockIndex || block.timestamp < walletNonFungibleLocks[lockedWallet][lockIndex - 1].visibleTime)
             return 0;
 
         return walletNonFungibleLocks[lockedWallet][lockIndex - 1].ids.length;
@@ -316,11 +346,11 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
         uint256 low, uint256 up)
     public
     view
-    returns (int256[])
+    returns (int256[] memory)
     {
         uint256 lockIndex = lockedCurrencyLockerNonFungibleLockIndex[lockedWallet][currencyCt][currencyId][lockerWallet];
 
-        if (0 == lockIndex)
+        if (0 == lockIndex || block.timestamp < walletNonFungibleLocks[lockedWallet][lockIndex - 1].visibleTime)
             return new int256[](0);
 
         NonFungibleLock storage lock = walletNonFungibleLocks[lockedWallet][lockIndex - 1];
@@ -402,7 +432,7 @@ contract WalletLocker is Ownable, Configurable, AuthorizableServable {
 
     function _unlockNonFungible(address lockedWallet, address lockerWallet, address currencyCt, uint256 currencyId, uint256 lockIndex)
     private
-    returns (int256[])
+    returns (int256[] memory)
     {
         int256[] memory ids = walletNonFungibleLocks[lockedWallet][lockIndex - 1].ids;
 

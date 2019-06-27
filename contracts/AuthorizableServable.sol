@@ -6,7 +6,7 @@
  * Copyright (C) 2017-2018 Hubii AS
  */
 
-pragma solidity ^0.4.25;
+pragma solidity >=0.4.25 <0.6.0;
 
 import {Servable} from "./Servable.sol";
 
@@ -137,7 +137,7 @@ contract AuthorizableServable is Servable {
     /// @dev The service must be registered already
     /// @param service The address of the concerned registered service
     /// @param action The concerned service action
-    function authorizeRegisteredServiceAction(address service, string action)
+    function authorizeRegisteredServiceAction(address service, string memory action)
     public
     notNullOrThisAddress(service)
     {
@@ -167,7 +167,7 @@ contract AuthorizableServable is Servable {
     /// @dev The service must be registered already
     /// @param service The address of the concerned registered service
     /// @param action The concerned service action
-    function unauthorizeRegisteredServiceAction(address service, string action)
+    function unauthorizeRegisteredServiceAction(address service, string memory action)
     public
     notNullOrThisAddress(service)
     {
@@ -193,7 +193,7 @@ contract AuthorizableServable is Servable {
     /// @param action The concerned service action
     /// @param wallet The address of the concerned wallet
     /// @return true if service action is authorized for the given wallet, else false
-    function isAuthorizedRegisteredServiceAction(address service, string action, address wallet)
+    function isAuthorizedRegisteredServiceAction(address service, string memory action, address wallet)
     public
     view
     returns (bool)
@@ -201,7 +201,11 @@ contract AuthorizableServable is Servable {
         bytes32 actionHash = hashString(action);
 
         return isEnabledServiceAction(service, action) &&
-        (isInitialServiceAuthorizedForWallet(service, wallet) || serviceActionWalletAuthorizedMap[service][actionHash][wallet]);
+        (
+        isInitialServiceAuthorizedForWallet(service, wallet) ||
+        serviceWalletAuthorizedMap[service][wallet] ||
+        serviceActionWalletAuthorizedMap[service][actionHash][wallet]
+        );
     }
 
     function isInitialServiceAuthorizedForWallet(address service, address wallet)
@@ -220,7 +224,7 @@ contract AuthorizableServable is Servable {
         _;
     }
 
-    modifier onlyAuthorizedServiceAction(string action, address wallet) {
+    modifier onlyAuthorizedServiceAction(string memory action, address wallet) {
         require(isAuthorizedRegisteredServiceAction(msg.sender, action, wallet));
         _;
     }

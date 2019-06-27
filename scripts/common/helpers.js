@@ -1,56 +1,77 @@
-exports.getOwnerAccountFromArgs = function () {
-    let i;
+const debug = require('debug')('helpers');
 
-    for (i = 0; i < process.argv.length; i++) {
-        if (process.argv[i] == '--wallet') {
+exports.hasArg = (argName) => {
+    const arg = `--${argName}`;
+    return process.argv.some(a => a == arg);
+};
+
+exports.parseStringArg = (argName) => {
+    const arg = `--${argName}`;
+
+    for (let i = 0; i < process.argv.length; i++) {
+        if (process.argv[i] == arg) {
             if (i >= process.argv.length + 1)
-                throw new Error('Error: Missing argument for \'--wallet\'');
+                throw new Error(`Error: Missing argument for '${arg}'`);
 
-            let address = process.argv[i + 1];
-            if (address.substr(0, 2).toLowerCase() == '0x')
-                address = address.substr(2); //remove prefix
-            if (!/^[0-9a-f]{40}$/i.test(address))
-                throw new Error('Error: Invalid address specified in \'--wallet\' argument');
-            return '0x' + address;
+            return process.argv[i + 1];
         }
     }
-    throw new Error('Error: Missing \'--wallet\' parameter');
+    throw new Error(`Error: Missing '${arg}' parameter`);
 };
 
-exports.getPasswordFromArgs = function () {
-    let i;
-
-    for (i = 0; i < process.argv.length; i++) {
-        if (process.argv[i] == '--password') {
-            if (i >= process.argv.length + 1)
-                throw new Error('Error: Missing argument for \'--password\'');
-
-            let password = process.argv[i + 1];
-            if (password.length == 0)
-                throw new Error('Error: Invalid address specified in \'--password\' argument');
-            return password;
-        }
-    }
-    throw new Error('Error: Missing \'--password\' parameter');
-};
-/*
-exports.unlockAddress = function (web3, address, password, timeoutInSecs) {
-    web3.personal.unlockAccount(address, password, timeoutInSecs);
+exports.parseIntArg = (argName) => {
+    const result = parseInt(exports.parseStringArg(argName));
+    if (isNaN(result))
+        throw new Error(`Error: Non-integer specified in '--${argName}' argument`);
+    return result;
 };
 
-exports.lockAddress = function (web3, address) {
-    web3.personal.lockAccount(address);
+exports.parseAddressArg = (argName) => {
+    let address = exports.parseStringArg(argName);
+    if (address.substr(0, 2).toLowerCase() == '0x')
+        address = address.substr(2); //remove prefix
+    if (!/^[0-9a-f]{40}$/i.test(address))
+        throw new Error(`Error: Invalid address specified in '--${argName}' argument`);
+    return '0x' + address;
 };
-*/
-exports.isTestNetwork = function (network) {
+
+exports.parseDeployerArg = () => {
+    return exports.parseAddressArg('deployer');
+};
+
+exports.parsePasswordArg = () => {
+    const password = exports.parseStringArg('password');
+    if (0 == password.length)
+        throw new Error(`Error: Empty parameter in '--password' argument`);
+    return password;
+};
+
+exports.parseNetworkArg = () => {
+    return exports.parseStringArg('network');
+};
+
+exports.unlockAddress = async (web3, address, password, timeoutInSecs) => {
+    const personal = web3.eth.personal || web3.personal;
+    const succeeded = await personal.unlockAccount(address, password, timeoutInSecs);
+    debug(`unlock of address ${address} for ${timeoutInSecs}s: ${succeeded ? 'successful' : 'unsuccessful'}`);
+    return succeeded;
+};
+
+exports.lockAddress = async (web3, address) => {
+    const personal = web3.eth.personal || web3.personal;
+    const succeeded = await personal.lockAccount(address);
+    debug(`lock of address ${address}: ${succeeded ? 'successful' : 'unsuccessful'}`);
+    return succeeded;
+};
+
+exports.isTestNetwork = (network) => {
     return (network.includes('develop') || network.includes('ganache'));
 };
 
-exports.getFiltersFromArgs = function () {
+exports.getFiltersFromArgs = () => {
     let finalFilters = [];
-    let i;
 
-    for (i = 0; i < process.argv.length; i++) {
+    for (let i = 0; i < process.argv.length; i++) {
         if (process.argv[i] == '--filter') {
             if (i >= process.argv.length + 1)
                 throw new Error('Error: Missing argument for \'--filter\'');
@@ -68,15 +89,15 @@ exports.getFiltersFromArgs = function () {
     return (finalFilters.length > 0) ? finalFilters : null;
 };
 
-exports.isResetArgPresent = function () {
-    for (i = 0; i < process.argv.length; i++) {
+exports.isResetArgPresent = () => {
+    for (let i = 0; i < process.argv.length; i++) {
         if (process.argv[i] == '--reset')
             return true;
     }
     return false;
 };
 
-exports.networkIdToName = function(id) {
+exports.networkIdToName = (id) => {
     switch (id) {
         case '1':
             return 'mainnet';
@@ -89,8 +110,7 @@ exports.networkIdToName = function(id) {
     }
 };
 
-exports.sleep = (ms) =>
-{
+exports.sleep = (ms) => {
     return new Promise(resolve => setTimeout(resolve, ms));
 };
 
