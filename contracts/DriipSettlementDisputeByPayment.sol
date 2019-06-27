@@ -99,36 +99,25 @@ BalanceTrackable, FraudChallengable, Servable {
     onlyPaymentSender(payment, wallet)
     {
         // Require that payment candidate is not labelled fraudulent
-        require(
-            !fraudChallenge.isFraudulentPaymentHash(payment.seals.operator.hash),
-            "Payment deemed fraudulent [DriipSettlementDisputeByPayment.sol:102]"
-        );
+        require(!fraudChallenge.isFraudulentPaymentHash(payment.seals.operator.hash), "Payment deemed fraudulent [DriipSettlementDisputeByPayment.sol:102]");
 
         // Require that proposal has been initiated
-        require(
-            driipSettlementChallengeState.hasProposal(wallet, payment.currency),
-            "No proposal found [DriipSettlementDisputeByPayment.sol:108]"
-        );
+        require(driipSettlementChallengeState.hasProposal(wallet, payment.currency), "No proposal found [DriipSettlementDisputeByPayment.sol:105]");
 
         // Require that proposal has not expired
-        require(
-            !driipSettlementChallengeState.hasProposalExpired(wallet, payment.currency),
-            "Proposal found expired [DriipSettlementDisputeByPayment.sol:114]"
-        );
+        require(!driipSettlementChallengeState.hasProposalExpired(wallet, payment.currency), "Proposal found expired [DriipSettlementDisputeByPayment.sol:108]");
 
         // Require that payment party's nonce is strictly greater than proposal's nonce and its current
         // disqualification nonce
-        require(
-            payment.sender.nonce > driipSettlementChallengeState.proposalNonce(wallet, payment.currency),
-            "Payment nonce not strictly greater than proposal nonce [DriipSettlementDisputeByPayment.sol:121]"
-        );
-        require(
-            payment.sender.nonce > driipSettlementChallengeState.proposalDisqualificationNonce(wallet, payment.currency),
-            "Payment nonce not strictly greater than proposal disqualification nonce [DriipSettlementDisputeByPayment.sol:125]"
-        );
+        require(payment.sender.nonce > driipSettlementChallengeState.proposalNonce(
+            wallet, payment.currency
+        ), "Payment nonce not strictly greater than proposal nonce [DriipSettlementDisputeByPayment.sol:112]");
+        require(payment.sender.nonce > driipSettlementChallengeState.proposalDisqualificationNonce(
+            wallet, payment.currency
+        ), "Payment nonce not strictly greater than proposal disqualification nonce [DriipSettlementDisputeByPayment.sol:115]");
 
         // Require overrun for this payment to be a valid challenge candidate
-        require(_overrun(wallet, payment), "No overrun found [DriipSettlementDisputeByPayment.sol:131]");
+        require(_overrun(wallet, payment), "No overrun found [DriipSettlementDisputeByPayment.sol:120]");
 
         // Reward challenger
         _settleRewards(wallet, payment.sender.balances.current, payment.currency, challenger);
@@ -139,7 +128,7 @@ BalanceTrackable, FraudChallengable, Servable {
             payment.sender.nonce, payment.seals.operator.hash, PaymentTypesLib.PAYMENT_KIND()
         );
 
-        // Terminate dependent null settlement challenge proposal if existent
+        // Cancel dependent null settlement challenge if existent
         nullSettlementChallengeState.terminateProposal(wallet, payment.currency);
 
         // Emit event

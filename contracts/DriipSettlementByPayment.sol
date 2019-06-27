@@ -183,57 +183,40 @@ FraudChallengable, WalletLockable, PartnerBenefactorable {
     onlySealedPayment(payment)
     onlyPaymentParty(payment, wallet)
     {
-        require(
-            !fraudChallenge.isFraudulentPaymentHash(payment.seals.operator.hash),
-            "Payment deemed fraudulent [DriipSettlementByPayment.sol:186]"
-        );
-        require(
-            !communityVote.isDoubleSpenderWallet(wallet),
-            "Wallet deemed double spender [DriipSettlementByPayment.sol:190]"
-        );
+        require(!fraudChallenge.isFraudulentPaymentHash(payment.seals.operator.hash), "Payment deemed fraudulent [DriipSettlementByPayment.sol:186]");
+        require(!communityVote.isDoubleSpenderWallet(wallet), "Wallet deemed double spender [DriipSettlementByPayment.sol:187]");
 
         // Require that wallet is not locked
-        require(!walletLocker.isLocked(wallet), "Wallet found locked [DriipSettlementByPayment.sol:196]");
+        require(!walletLocker.isLocked(wallet), "Wallet found locked [DriipSettlementByPayment.sol:190]");
 
         // Require that the wallet's current driip settlement challenge proposal is defined wrt this payment
-        require(
-            payment.seals.operator.hash == driipSettlementChallengeState.proposalChallengedHash(wallet, payment.currency),
-            "Payment not challenged [DriipSettlementByPayment.sol:199]"
-        );
+        require(payment.seals.operator.hash == driipSettlementChallengeState.proposalChallengedHash(
+            wallet, payment.currency
+        ), "Payment not challenged [DriipSettlementByPayment.sol:193]");
 
         // Extract properties depending on settlement role
         (
-        DriipSettlementTypesLib.SettlementRole settlementRole, uint256 nonce,
+        DriipSettlementTypesLib.SettlementRole settlementRole, uint256 walletNonce,
         NahmiiTypesLib.OriginFigure[] memory totalFees, int256 currentBalance
         ) = _getRoleProperties(payment, wallet);
 
         // Require that driip settlement challenge proposal has been initiated
-        require(
-            driipSettlementChallengeState.hasProposal(wallet, nonce, payment.currency),
-            "No proposal found [DriipSettlementByPayment.sol:211]"
-        );
+        require(driipSettlementChallengeState.hasProposal(wallet, walletNonce, payment.currency), "No proposal found [DriipSettlementByPayment.sol:204]");
 
         // Require that driip settlement challenge proposal has not been terminated already
-        require(
-            !driipSettlementChallengeState.hasProposalTerminated(wallet, payment.currency),
-            "Proposal found terminated [DriipSettlementByPayment.sol:217]"
-        );
+        require(!driipSettlementChallengeState.hasProposalTerminated(wallet, payment.currency), "Proposal found terminated [DriipSettlementByPayment.sol:207]");
 
         // Require that driip settlement challenge proposal has expired
-        require(
-            driipSettlementChallengeState.hasProposalExpired(wallet, payment.currency),
-            "Proposal found not expired [DriipSettlementByPayment.sol:223]"
-        );
+        require(driipSettlementChallengeState.hasProposalExpired(wallet, payment.currency), "Proposal found not expired [DriipSettlementByPayment.sol:210]");
 
         // Require that driip settlement challenge proposal qualified
-        require(
-            SettlementChallengeTypesLib.Status.Qualified == driipSettlementChallengeState.proposalStatus(wallet, payment.currency),
-            "Proposal found not qualified [DriipSettlementByPayment.sol:229]"
-        );
+        require(SettlementChallengeTypesLib.Status.Qualified == driipSettlementChallengeState.proposalStatus(
+            wallet, payment.currency
+        ), "Proposal found not qualified [DriipSettlementByPayment.sol:213]");
 
         // Require that operational mode is normal and data is available
-        require(configuration.isOperationalModeNormal(), "Not normal operational mode [DriipSettlementByPayment.sol:235]");
-        require(communityVote.isDataAvailable(), "Data not available [DriipSettlementByPayment.sol:236]");
+        require(configuration.isOperationalModeNormal(), "Not normal operational mode [DriipSettlementByPayment.sol:218]");
+        require(communityVote.isDataAvailable(), "Data not available [DriipSettlementByPayment.sol:219]");
 
         // Init settlement, i.e. create one if no such settlement exists for the double pair of wallets and nonces
         driipSettlementState.initSettlement(
@@ -243,21 +226,20 @@ FraudChallengable, WalletLockable, PartnerBenefactorable {
         );
 
         // If exists settlement of nonce then require that wallet has not already settled
-        require(
-            !driipSettlementState.isSettlementPartyDone(wallet, nonce, settlementRole),
-            "Settlement party already done [DriipSettlementByPayment.sol:246]"
-        );
+        require(!driipSettlementState.isSettlementPartyDone(
+            wallet, walletNonce, settlementRole
+        ), "Settlement party already done [DriipSettlementByPayment.sol:229]");
 
         // Set address of origin or target to prevent the same settlement from being resettled by this wallet
         driipSettlementState.completeSettlementParty(
-            wallet, nonce, settlementRole, true
+            wallet, walletNonce, settlementRole, true
         );
 
         // If wallet has previously settled balance of the concerned currency with higher wallet nonce, then don't
         // settle balance again
-        if (driipSettlementState.maxNonceByWalletAndCurrency(wallet, payment.currency) < nonce) {
+        if (driipSettlementState.maxNonceByWalletAndCurrency(wallet, payment.currency) < walletNonce) {
             // Update settled nonce of wallet and currency
-            driipSettlementState.setMaxNonceByWalletAndCurrency(wallet, payment.currency, nonce);
+            driipSettlementState.setMaxNonceByWalletAndCurrency(wallet, payment.currency, walletNonce);
 
             // Update settled balance
             clientFund.updateSettledBalance(
@@ -269,11 +251,11 @@ FraudChallengable, WalletLockable, PartnerBenefactorable {
                 wallet, driipSettlementChallengeState.proposalStageAmount(wallet, payment.currency),
                 payment.currency.ct, payment.currency.id, standard
             );
-
-            // Stage fees to revenue fund
-            if (address(0) != address(revenueFund))
-                _stageFees(wallet, totalFees, revenueFund, nonce, standard);
         }
+
+        // Stage fees to revenue fund
+        if (address(0) != address(revenueFund))
+            _stageFees(wallet, totalFees, revenueFund, walletNonce, standard);
 
         // Remove driip settlement challenge proposal
         driipSettlementChallengeState.terminateProposal(wallet, payment.currency, false);

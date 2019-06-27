@@ -39,6 +39,8 @@ contract NullSettlementState is Ownable, Servable, CommunityVotable {
 
     mapping(address => mapping(address => mapping(uint256 => uint256))) public walletCurrencyMaxNonce;
 
+    bool public upgradesFrozen;
+
     //
     // Events
     // -----------------------------------------------------------------------------------------------------------------

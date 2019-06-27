@@ -203,7 +203,7 @@ BalanceTrackable {
         // Define currency
         MonetaryTypesLib.Currency memory currency = MonetaryTypesLib.Currency(currencyCt, currencyId);
 
-        // Stop challenge
+        // Terminate driip settlement challenge proposal
         _stopChallenge(wallet, currency, true, false);
 
         // Emit event
@@ -492,33 +492,24 @@ BalanceTrackable {
         );
 
         // Require that given wallet is a payment party
-        require(
-            validator.isPaymentParty(payment, wallet),
-            "Wallet is not payment party [DriipSettlementChallengeByPayment.sol:495]"
-        );
+        require(validator.isPaymentParty(payment, wallet), "Wallet is not payment party [DriipSettlementChallengeByPayment.sol:495]");
 
         // Require that there is no ongoing overlapping driip settlement challenge
         require(
             !driipSettlementChallengeState.hasProposal(wallet, payment.currency) ||
         driipSettlementChallengeState.hasProposalTerminated(wallet, payment.currency),
-            "Overlapping driip settlement challenge proposal found [DriipSettlementChallengeByPayment.sol:501]"
+            "Overlapping driip settlement challenge proposal found [DriipSettlementChallengeByPayment.sol:498]"
         );
 
         // Require that there is no ongoing overlapping null settlement challenge
         require(
             !nullSettlementChallengeState.hasProposal(wallet, payment.currency) ||
         nullSettlementChallengeState.hasProposalTerminated(wallet, payment.currency),
-            "Overlapping null settlement challenge proposal found [DriipSettlementChallengeByPayment.sol:508]"
+            "Overlapping null settlement challenge proposal found [DriipSettlementChallengeByPayment.sol:505]"
         );
 
         // Deduce the concerned nonce and cumulative relative transfer
         (uint256 nonce, int256 cumulativeTransferAmount) = _paymentPartyProperties(payment, wallet);
-
-        // Require that the wallet nonce of the payment is higher than the highest settled wallet nonce
-        require(
-            driipSettlementState.maxNonceByWalletAndCurrency(wallet, payment.currency) < nonce,
-            "Wallet's nonce below highest settled nonce [DriipSettlementChallengeByPayment.sol:518]"
-        );
 
         // Initiate proposal, including assurance that there is no overlap with active proposal
         // Target balance amount is calculated as current balance - cumulativeTransferAmount - stageAmount
@@ -536,14 +527,8 @@ BalanceTrackable {
     private
     {
         // Require that there is an unterminated driip settlement challenge proposal
-        require(
-            driipSettlementChallengeState.hasProposal(wallet, currency),
-            "No proposal found [DriipSettlementChallengeByPayment.sol:539]"
-        );
-        require(
-            !driipSettlementChallengeState.hasProposalTerminated(wallet, currency),
-            "Proposal found terminated [DriipSettlementChallengeByPayment.sol:543]"
-        );
+        require(driipSettlementChallengeState.hasProposal(wallet, currency), "No proposal found [DriipSettlementChallengeByPayment.sol:530]");
+        require(!driipSettlementChallengeState.hasProposalTerminated(wallet, currency), "Proposal found terminated [DriipSettlementChallengeByPayment.sol:531]");
 
         // Terminate driip settlement challenge proposal
         driipSettlementChallengeState.terminateProposal(wallet, currency, clearNonce, walletTerminated);
