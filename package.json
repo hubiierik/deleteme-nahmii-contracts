@@ -59,6 +59,7 @@
     "exec:upgrade-state": "truffle exec scripts/truffle/upgrade-state.js",
     "postinstall_x": "cd node_modules/truffle && npm install solc@^0.5.8 && cd ../.. && npm dedupe",
     "postinstall": "cd ../truffle && npm install solc@^0.5.8 && cd ../nahmii-contracts",
+    "postinstall_y": "npm explore truffle -- npm install solc@^0.5.8",
     "pretest": "npm run exec:update-require-messages",
     "sample:events": "concurrently --raw --success first --kill-others 'ganache-cli -l 8000000 -e 1000 >/dev/null' 'truffle compile && truffle test ./sample/*.js'",
     "symlink:contract-abstractions": "npm run symlink:contract-abstractions-contracts && npm run symlink:contract-abstractions-events",
